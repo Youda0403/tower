@@ -1485,6 +1485,8 @@ function rng() {
 }
 function rint(n) { return Math.floor(rng() * n); }
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rint(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const NUM_BATCHIM = [true, true, false, true, false, false, true, true, true, false]; // 0영 1일 2이 3삼 4사 5오 6육 7칠 8팔 9구
+function numJo(n, withB, withoutB) { const d = Math.abs(n) % 10; if (withB === '으로' && [1, 7, 8].includes(d)) return `${n}로`; return `${n}${NUM_BATCHIM[d] ? withB : withoutB}`; } // 1·7·8은 ㄹ 받침이라 '로'
 function jo(w, a, b) {
   const s = String(w); const ch = s.charCodeAt(s.length - 1);
   if (ch < 0xAC00 || ch > 0xD7A3) return s + a;
@@ -4111,7 +4113,9 @@ function applyRunMeta(run) {
   if (run.cleared) m.clears++;
   if ((run.bossWins || 0) >= 1) {
     if (!m.frame) { m.frame = true; frameNew = true; }
-    if ((run.diff || 0) >= m.maxDiff && m.maxDiff < DIFFS.length - 1) { m.maxDiff = (run.diff || 0) + 1; diffNew = m.maxDiff; }
+    // 무게 0은 스테이지 1 보스만 쓰러뜨려도, 무게 1부터는 그 무게로 탑을 끝까지 올라야 다음 무게가 열립니다(이미 열린 무게는 그대로)
+    const d = run.diff || 0;
+    if (d >= m.maxDiff && m.maxDiff < DIFFS.length - 1 && (d === 0 || run.cleared)) { m.maxDiff = d + 1; diffNew = m.maxDiff; }
   }
   saveMeta();
   run.metaResult = { ...s, have: m.shards, frameNew, diffNew };
@@ -4500,7 +4504,7 @@ function renderRunEnd() {
       <p class="small">오른 층 ${totalFloor(r)} × ${SHARD_RULE.floor} = ${mr.floor}, 엘리트 처치 ${r.eliteWins || 0} × ${SHARD_RULE.elite} = ${mr.elite}${mr.boss ? `, 보스 처치 ${r.bossWins} × ${SHARD_RULE.boss} = ${mr.boss}` : ''}${mr.bonus ? `, 무게 보너스 +${mr.bonus}` : ''}</p>
       <p class="soft small">보유 기억 조각 ${mr.have}. 거점에서 해금에 씁니다.</p>
       ${mr.frameNew ? '<p class="note good">첫 보스 처치! 초상화 금테가 열렸습니다.</p>' : ''}
-      ${mr.diffNew ? `<p class="note good">탑의 무게 ${mr.diffNew}이 열렸습니다. 출정 준비에서 고를 수 있습니다.</p>` : ''}</section>` : '';
+      ${mr.diffNew ? `<p class="note good">탑의 무게 ${numJo(mr.diffNew, '이', '가')} 열렸습니다. 출정 준비에서 고를 수 있습니다.</p>` : ''}</section>` : '';
   let legacy = '';
   if (r.fromPrep && r.deck.length) {
     if (r.legacyLeft) legacy = `<p>${esc(fixJosa(`${r.legacyLeft}을(를) 유품으로 남겼습니다.`))}</p><p class="soft small">다음 런에서 ${legacyPlaceText({ floor: r.floor, stage: r.stage })} 중 한 곳에 유품 칸이 나옵니다.</p>`;
@@ -4811,7 +4815,7 @@ function renderBase() {
     <section class="panel shard-panel">
       <div class="shard-count"><span>기억 조각</span><b>${m.shards}</b></div>
       <p class="soft small">런 ${m.runs}번, 가장 높이 오른 곳 ${floorText(m.best)}, 탑 돌파 ${m.clears}번 · ${titleCountText()}</p>
-      <p class="soft small">열린 무게: ${m.maxDiff ? `0~${m.maxDiff}. 출정 준비에서 고를 수 있습니다` : '없음. 스테이지 1의 보스를 쓰러뜨리면 탑의 무게(난이도)가 열립니다'}</p>
+      <p class="soft small">열린 무게: ${m.maxDiff ? `0~${m.maxDiff}. 출정 준비에서 고를 수 있습니다${m.maxDiff < DIFFS.length - 1 ? `. 무게 ${numJo(m.maxDiff, '으로', '로')} 탑을 끝까지 오르면 무게 ${numJo(m.maxDiff + 1, '이', '가')} 열립니다` : ''}` : '없음. 스테이지 1의 보스를 쓰러뜨리면 탑의 무게(난이도)가 열립니다'}</p>
       <p class="soft small">런이 끝나면 도달한 층마다 ${SHARD_RULE.floor}개, 엘리트를 쓰러뜨릴 때마다 ${SHARD_RULE.elite}개, 보스를 쓰러뜨리면 ${SHARD_RULE.boss}개를 얻습니다.</p>
     </section>
     ${!m.runs && !m.shards && !m.legacy && !m.sentCode ? `<section class="panel"><p class="soft small">런을 한 번 마치면 여기에 해금과 유품이 나타납니다. 먼저 출정 준비에서 탑에 올라 보세요.</p>${recv}</section>` : `<section class="panel"><h2>해금</h2><p class="soft small">원정 해금은 다음 출정부터, 꾸미기 해금은 바로 적용됩니다. 적용 버튼으로 바꾸거나 끌 수 있어요.</p><h3 class="unlock-group-title">로스터</h3><ul class="ul-list">${rosterUnlocks.map(unlockRowHtml).join('')}</ul><h3 class="unlock-group-title">원정</h3><ul class="ul-list">${Object.keys(UNLOCKS).filter(k => !decor.includes(k) && !rosterUnlocks.includes(k)).map(unlockRowHtml).join('')}</ul><h3 class="unlock-group-title">꾸미기</h3><ul class="ul-list">
@@ -5270,7 +5274,7 @@ const HOWTO = [
   ['야영과 스테이지 이동', '야영에서는 휴식·치료·대화 중 하나를 고릅니다. 휴식과 사선 동료 한 명의 치료는 보급 2가 듭니다. 유물·해금이 없을 때 휴식은 스트레스를 25 회복하고, 무게 2부터는 20 회복합니다. 스테이지를 넘으면 스트레스를 25 회복하고 50 이하로 낮추며 사선 동료를 모두 치료합니다. 보급은 기본 2, 무게 1부터 1을 받습니다. **사망한 동료는 돌아오지 않습니다.**'],
   ['전투 다시하기', '진행 중인 전투에서 한 번, 그 시점의 보급 2를 써서 같은 시작 손패·적 배치로 다시 싸울 수 있습니다. 이미 쓴 보급은 돌아오지 않습니다. 패배한 뒤에는 사용할 수 없으며, **사용한 원정에서는 특별칭호를 획득할 수 없습니다.**'],
   ['거점', '런이 끝나면 오른 층과 쓰러뜨린 엘리트, 보스만큼 **기억 조각**을 얻어 해금에 씁니다. 덱의 카드 1장을 유품으로 남기면 다음 런에서 그 근처 층에서 다시 찾을 수 있고, 코드로 만들어 다른 사람에게 보낼 수도 있습니다. 마지막 원정 보고서는 거점에서 다시 보고 PNG로 저장할 수 있습니다.'],
-  ['탑의 무게', '스테이지 1의 보스를 쓰러뜨리면 한 단계 더 무거운 탑(난이도)이 열립니다. 무게가 높아지면 **이전 조건도 모두 누적됩니다.** 기억 조각 보너스가 늘고, 시작 덱은 무게만큼(최대 3장) 셋 중에서 고를 수 있습니다.'],
+  ['탑의 무게', '처음에는 스테이지 1의 보스를 쓰러뜨리면 무게 1(난이도)이 열립니다. 그다음부터는 **지금 열린 가장 무거운 무게로 탑을 끝까지 올라야** 한 단계 더 무거운 탑이 열립니다. 무게가 높아지면 **이전 조건도 모두 누적됩니다.** 기억 조각 보너스가 늘고, 시작 덱은 무게만큼(최대 3장) 셋 중에서 고를 수 있습니다.'],
 ];
 function renderHowTo() {
   app.innerHTML = `<main class="setup howto">
